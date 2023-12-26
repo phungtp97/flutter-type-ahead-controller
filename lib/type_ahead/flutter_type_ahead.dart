@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class SuggestedDataWrapper<T> {
@@ -19,6 +18,10 @@ class SuggestedDataWrapper<T> {
         other.prefix == this.prefix &&
         other.id == this.id;
   }
+
+  @override
+  int get hashCode => super.hashCode;
+
 }
 
 class TypeAheadTextFieldController extends TextEditingController {
@@ -274,12 +277,12 @@ class TypeAheadTextFieldController extends TextEditingController {
           Offset physicalOffset = new Offset(
               physicalOffsetDx + (edgePadding?.left ?? 0), physicalOffsetDy);
 
-          WidgetsBinding.instance?.addPostFrameCallback((timeStamp) {
+          WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
             onStateChanged!(
                 PrefixMatchState(prefix, texts.last, offset: physicalOffset));
           });
         } else {
-          WidgetsBinding.instance?.addPostFrameCallback((timeStamp) {
+          WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
             onStateChanged!(null);
           });
         }
@@ -354,17 +357,4 @@ class PrefixMatchState {
   Offset? offset;
 
   PrefixMatchState(this.prefix, this.text, {this.offset});
-}
-
-enum TypeAheadItemChangedState { Add, Remove }
-
-class PositionData {
-  double? top;
-  double? bottom;
-  double? left;
-  double? right;
-
-  PositionData({this.top, this.bottom, this.left, this.right})
-      : assert(
-            (top != null || bottom != null) && (left != null || right != null));
 }
