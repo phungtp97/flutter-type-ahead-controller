@@ -1,18 +1,37 @@
 ## Flutter Type Ahead TextField
 
-Making Facebook-like type-to-tag dynamic TextField
+Making Facebook-like type-to-tag dynamic TextField. 
 
 ![ Alt text](https://media.giphy.com/media/oQ4UtBHcUULM4VbKUu/giphy.gif) / ! [](https://media.giphy.com/media/oQ4UtBHcUULM4VbKUu/giphy.gif)![ Alt text](https://media.giphy.com/media/ahdzrBHI0z4YMbIAI9/giphy.gif) / ! [](https://media.giphy.com/media/ahdzrBHI0z4YMbIAI9/giphy.gif)
 
-#Core features
-- Create callbacks that will run whenever the user types designated prefixes. And let's not forget when the user types more and more that the cursor moves out of the word that has matched prefix
-- Suggest a list of data based on detected prefix. For instance, @ for friends, # for trending tags
-- One TextField can handle multiple types of prefixes. For instance, it can detect @,#, and more
-- Suggestion items are based on the detected prefix
-- Place the suggestion dialog right at the detected prefix and when the TextField cursor is placed right after it. You can get the PrefixMatchState once the controller detected prefixes
-- Move the suggestion dialog as user type which is making the offset of the TextField cursor changed. With Facebook, only the Y offset of it is variable since Facebook's suggestion dialog width is constant. TypeAheadTextFieldController supports checking the X offset because who knows, you may need it ;)
-- What about if the text length is so big that the TextField scroll down. In that case, we will need to recalculate the X. My solution is to provide the TextField controller and get the position
-- You can custom the TextSpan for words that match different prefixes and you can add dynamic data. For instance, UserModel or TagModel. CustomSpan will be only applied to text that added to approved data
-- What if the user adds an item but then decides to delete the text? You can listen to onRemove callback to see what has been removed
+# Core Features
 
-#Read more: https://medium.com/@phungtp97/making-a-dynamic-type-to-tag-dialog-thats-auto-pop-up-in-flutter-3a7848b1dada
+1. **Prefix-Triggered Callbacks**
+    - Create callbacks that trigger whenever the user types designated prefixes (e.g., `@`, `#`). This functionality includes handling scenarios where the cursor moves out of the word containing the matched prefix as the user types more.
+
+2. **Dynamic Data Suggestions**
+    - Suggest a list of data based on the detected prefix. For example, `@` for friends and `#` for trending tags.
+
+3. **Multi-Prefix Detection**
+    - Enable a single `TextField` to handle multiple types of prefixes, such as `@`, `#`, and more.
+
+4. **Prefix-Based Suggestions**
+    - Generate suggestion items dynamically based on the detected prefix.
+
+5. **Contextual Suggestion Dialog**
+    - Place the suggestion dialog right at the detected prefix. Ensure it appears when the `TextField` cursor is positioned directly after the prefix. You can obtain the `PrefixMatchState` once the controller detects prefixes.
+
+6. **Responsive Suggestion Dialog**
+    - Adjust the position of the suggestion dialog as the user types, accounting for changes in the offset of the `TextField` cursor. The dialog's Y offset is variable, while the width remains constant (e.g., similar to Facebook's suggestion dialog). The `TypeAheadTextFieldController` also supports checking the X offset for greater customization.
+
+7. **Scroll Handling**
+    - Recalculate the X offset if the text length becomes extensive, causing the `TextField` to scroll. This is achieved by providing the `TextField` controller and retrieving the position dynamically.
+
+8. **Customizable TextSpan**
+    - Customize the `TextSpan` for words matching different prefixes. This includes adding dynamic data, such as `UserModel` or `TagModel`. The `CustomSpan` is applied only to text that has been added to the approved data.
+
+9. **OnRemove Callback**
+    - Listen to the `onRemove` callback to handle scenarios where the user adds an item and subsequently deletes the text, allowing for appropriate adjustments based on what has been removed.
+
+
+## Read more: https://medium.com/@phungtp97/making-a-dynamic-type-to-tag-dialog-thats-auto-pop-up-in-flutter-3a7848b1dada

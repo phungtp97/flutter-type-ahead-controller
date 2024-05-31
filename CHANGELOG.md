@@ -1,3 +1,9 @@
+## 0.0.4
+* Add compileSdk => 33
+* Add namespace config for android
+* Update example
+* Enhance overlay offset calculation
+
 ## 0.0.3
 
 * update version to ">=2.12.0 <4.0.0"
