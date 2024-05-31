@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:rxdart/rxdart.dart';
 import 'package:type_ahead_text_field/type_ahead_text_field.dart';
+import 'package:rxdart/rxdart.dart';
 
 void main() {
   runApp(MyApp());
@@ -30,17 +30,18 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  TypeAheadTextFieldController? controller;
+  late final TypeAheadTextFieldController controller;
   final List<SuggestedDataWrapper> data = [];
   OverlayEntry? overlayEntry;
-  final GlobalKey<EditableTextState> tfKey = new GlobalKey();
-  final BehaviorSubject<PrefixMatchState> bhMatchedState =
-      new BehaviorSubject();
+  final GlobalKey<EditableTextState> tfKey = GlobalKey();
+  final ValueNotifier<PrefixMatchState?> matchedState = ValueNotifier(null);
   final List<String> users = ['john', 'josh', 'lucas', 'don', 'will'];
   final List<String> tags = ['meme', 'challenge', 'city'];
   PrefixMatchState? filterState;
   GlobalKey suggestionWidgetKey = new GlobalKey();
   bool readOnly = false;
+
+  BehaviorSubject<PrefixMatchState?> bhMatchedState = BehaviorSubject();
 
   @override
   void initState() {
@@ -75,6 +76,7 @@ class _MyHomePageState extends State<MyHomePage> {
         onStateChanged: (PrefixMatchState? state) {
           if (state != null && (filterState == null || filterState != state)) {
             filterState = state;
+            matchedState.value = state;
             bhMatchedState.add(state);
           }
 
@@ -89,69 +91,75 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   showSuggestionDialog() {
-    overlayEntry = OverlayEntry(builder: (context) {
-      return StreamBuilder<PrefixMatchState>(
-          stream: bhMatchedState,
-          builder: (context, snapshot) {
-            List<SuggestedDataWrapper> filteredData = filterState != null
-                ? data
-                    .where((element) => element.prefix == filterState!.prefix)
-                    .toList()
-                : [];
+    Size size = Size(200, 300);
 
-            Offset? offset;
-            offset = controller!.calculateGlobalOffset(
-                context, snapshot.data?.offset,
-                dialogHeight: 300, dialogWidth: 200);
-            return offset != null
+    overlayEntry = OverlayEntry(builder: (context) {
+      return StreamBuilder<PrefixMatchState?>(
+          stream: controller.matchStateListStream,
+          builder: (
+            context,
+            matchedState,
+          ) {
+            List<SuggestedDataWrapper>? filteredData =
+                controller.matchedSuggestionListStream.value;
+
+            Offset? offset = matchedState.data == null
+                ? null
+                : controller.calculateGlobalOffset(
+                    context: context,
+                    localOffset: matchedState.data!.offset,
+                    overlayContainerSize: size);
+            return offset != null && filteredData != null
                 ? Stack(
                     children: [
                       AnimatedPositioned(
                         key: suggestionWidgetKey,
-                        duration: Duration(milliseconds: 300),
+                        duration: Duration(milliseconds: 250),
                         left: (offset.dx),
                         top: (offset.dy),
                         child: Material(
                           color: Colors.transparent,
-                          child: Container(
-                            color: Colors.blue,
-                            height: 300,
-                            width: 200,
-                            child: Column(
-                              children: [
-                                Container(
-                                  height: 40,
-                                  alignment: Alignment.topRight,
-                                  child: IconButton(
-                                      onPressed: () {
-                                        removeOverlay();
-                                      },
-                                      icon: Icon(Icons.close)),
-                                ),
-                                Text('Filter: ${filterState?.text}'),
-                                Flexible(
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(minHeight: 200),
-                                    child: ListView.builder(
-                                      itemBuilder: (context, index) {
-                                        var item = filteredData[index];
-                                        return GestureDetector(
-                                          child: ListTile(
-                                            title: Text('${item.id}'),
-                                          ),
-                                          onTap: () {
-                                            controller!.approveSelection(
-                                                filterState!, item);
-                                            removeOverlay();
-                                            setState(() {});
-                                          },
-                                        );
-                                      },
-                                      itemCount: filteredData.length,
-                                    ),
+                          child: Card(
+                            child: Container(
+                              height: 300,
+                              width: 200,
+                              child: Column(
+                                children: [
+                                  Container(
+                                    height: 40,
+                                    alignment: Alignment.topRight,
+                                    child: IconButton(
+                                        onPressed: () {
+                                          removeOverlay();
+                                        },
+                                        icon: Icon(Icons.close)),
                                   ),
-                                )
-                              ],
+                                  Text('Filter: ${filterState?.text}'),
+                                  Flexible(
+                                    child: ConstrainedBox(
+                                      constraints:
+                                          BoxConstraints(minHeight: 200),
+                                      child: ListView.builder(
+                                        itemBuilder: (context, index) {
+                                          var item = filteredData[index];
+                                          return GestureDetector(
+                                            child: ListTile(
+                                              title: Text('${item.id}'),
+                                            ),
+                                            onTap: () {
+                                              controller.approveSelection(
+                                                  filterState!, item);
+                                              removeOverlay();
+                                              setState(() {});
+                                            },
+                                          );
+                                        },
+                                        itemCount: filteredData.length,
+                                      ),
+                                    ),
+                                  )
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -162,7 +170,7 @@ class _MyHomePageState extends State<MyHomePage> {
           });
     });
 
-    Overlay.of(context)?.insert(overlayEntry!);
+    Overlay.of(context).insert(overlayEntry!);
   }
 
   TextSpan customSpan(SuggestedDataWrapper data) {
@@ -197,7 +205,7 @@ class _MyHomePageState extends State<MyHomePage> {
           children: [
             Container(
               child: Text(
-                'Added data: ${controller?.getApprovedData().map((e) => '${e.prefix}${e.id}').toString()}',
+                'Added data: ${controller.getApprovedData().map((e) => '${e.prefix}${e.id}').toString()}',
                 style: TextStyle(color: Colors.blue),
               ),
               padding: EdgeInsets.only(bottom: 24, top: 24),
@@ -211,9 +219,9 @@ class _MyHomePageState extends State<MyHomePage> {
               child: TextField(
                 key: tfKey,
                 readOnly: readOnly,
-                scrollController: controller?.scrollController,
+                scrollController: controller.scrollController,
                 controller: controller,
-                maxLines: 10,
+                maxLines: 6,
                 decoration: InputDecoration.collapsed(hintText: 'Description'),
                 cursorHeight: 14,
                 cursorWidth: 2,
@@ -236,7 +244,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   void dispose() {
+    removeOverlay();
     super.dispose();
-    bhMatchedState.close();
+    matchedState.dispose();
   }
 }

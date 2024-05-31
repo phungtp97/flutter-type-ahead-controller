@@ -9,9 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  rxdart:
   type_ahead_text_field:
     path: ../
+  rxdart:
+
+dev_dependencies:
+  flutter_lints:
 
 flutter:
 

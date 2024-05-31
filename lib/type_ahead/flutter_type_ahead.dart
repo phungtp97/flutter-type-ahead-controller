@@ -1,4 +1,7 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:rxdart/rxdart.dart';
 
 class SuggestedDataWrapper<T> {
   ///You can use this to store additional data e.g UserModel
@@ -21,7 +24,6 @@ class SuggestedDataWrapper<T> {
 
   @override
   int get hashCode => super.hashCode;
-
 }
 
 class TypeAheadTextFieldController extends TextEditingController {
@@ -52,6 +54,20 @@ class TypeAheadTextFieldController extends TextEditingController {
   ///call when a matching text get removed
   Function(List<SuggestedDataWrapper> data)? onRemove;
 
+  final BehaviorSubject<PrefixMatchState?> _bhMatchedStateList =
+      BehaviorSubject.seeded(null);
+
+  final BehaviorSubject<List<SuggestedDataWrapper>?> _bhMatchedSuggestionList =
+      BehaviorSubject.seeded(null);
+
+  ValueStream<PrefixMatchState?> get matchStateListStream =>
+      _bhMatchedStateList.stream;
+
+  ValueStream<List<SuggestedDataWrapper>?> get matchedSuggestionListStream =>
+      _bhMatchedSuggestionList.stream;
+
+  late final StreamSubscription<PrefixMatchState?> _subscription;
+
   TypeAheadTextFieldController(
       {required this.appliedPrefixes,
       required this.textFieldKey,
@@ -62,6 +78,9 @@ class TypeAheadTextFieldController extends TextEditingController {
       this.onStateChanged,
       Set<SuggestedDataWrapper>? suggestibleData}) {
     this._suggestibleData = suggestibleData;
+    _subscription = _bhMatchedStateList.listen((value) {
+      _notifySuggestions();
+    });
   }
 
   Set<String>? _prefixes;
@@ -158,15 +177,13 @@ class TypeAheadTextFieldController extends TextEditingController {
           painter.layout();
         } catch (e) {}
 
-        print('check -- ${painter.height}');
-
         _cursorWidth = (textFieldKey.currentWidget as TextField).cursorWidth;
         _cursorHeight =
             ((textFieldKey.currentWidget as TextField).cursorHeight ??
                 style?.fontSize ??
                 Theme.of(textFieldKey.currentContext!)
                     .textTheme
-                    .headline6!
+                    .bodySmall!
                     .fontSize!);
 
         if (devicePixelRatio == null && textFieldKey.currentContext != null) {
@@ -189,7 +206,6 @@ class TypeAheadTextFieldController extends TextEditingController {
           (caretOffset.dy > 0 ? caretOffset.dy : -caretOffset.dy) +
               preferredLineHeight,
         );
-
         _selectionCheck(positiveOffset, _cursorHeight);
       } catch (e) {
         throw e;
@@ -203,6 +219,7 @@ class TypeAheadTextFieldController extends TextEditingController {
 
   setApprovedData(Set<SuggestedDataWrapper> data) {
     this._suggestibleData = data;
+    _notifySuggestions();
   }
 
   void approveSelection(PrefixMatchState state, SuggestedDataWrapper data) {
@@ -278,8 +295,9 @@ class TypeAheadTextFieldController extends TextEditingController {
               physicalOffsetDx + (edgePadding?.left ?? 0), physicalOffsetDy);
 
           WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-            onStateChanged!(
-                PrefixMatchState(prefix, texts.last, offset: physicalOffset));
+            final state = PrefixMatchState(prefix, texts.last, physicalOffset);
+            onStateChanged?.call(state);
+            _bhMatchedStateList.add(state);
           });
         } else {
           WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
@@ -292,69 +310,77 @@ class TypeAheadTextFieldController extends TextEditingController {
 
   Set<SuggestedDataWrapper> getApprovedData() => _approvedData;
 
-  Offset? calculateGlobalOffset(BuildContext context, Offset? localOffset,
-      {double? dialogHeight, double? dialogWidth}) {
-    if (localOffset != null) {
-      RenderBox? tfBox =
-          textFieldKey.currentContext?.findRenderObject() as RenderBox?;
+  Offset? calculateGlobalOffset(
+      {required BuildContext context,
+      required Offset localOffset,
+      required Size overlayContainerSize}) {
+    RenderBox? tfBox =
+        textFieldKey.currentContext?.findRenderObject() as RenderBox?;
 
-      double? screenWidth;
-      double? screenHeight;
-      if (tfBox != null) {
-        screenWidth = MediaQuery.of(context).size.width;
-        screenHeight = MediaQuery.of(context).size.height -
-            MediaQuery.of(context).viewInsets.bottom;
+    final position = tfBox?.localToGlobal(Offset.zero);
+    if (position == null) return null;
+    double? screenWidth = MediaQuery.of(context).size.width;
+    double? screenHeight = MediaQuery.of(context).size.height;
+
+    return getPosition(Rect.fromLTWH(0, 0, screenWidth, screenHeight),
+        overlayContainerSize, localOffset + position);
+  }
+
+  Offset? getPosition(Rect rectA, Size sizeB, Offset offset) {
+    // Possible positions relative to the offset
+    double maxLeft = rectA.width - sizeB.width - 1;
+    //double maxTop = rectA.height - sizeB.height - 1;
+    final rects = {
+      TypeAheadAlignEnum.bottomLeft: Rect.fromLTWH(
+          offset.dx - sizeB.width, offset.dy, sizeB.width, sizeB.height),
+      TypeAheadAlignEnum.bottomRight:
+          Rect.fromLTWH(offset.dx, offset.dy, sizeB.width, sizeB.height),
+      TypeAheadAlignEnum.topLeft: Rect.fromLTWH(offset.dx - sizeB.width,
+          offset.dy - sizeB.height, sizeB.width, sizeB.height),
+      TypeAheadAlignEnum.topRight: Rect.fromLTWH(
+          offset.dx, offset.dy - sizeB.height, sizeB.width, sizeB.height),
+    };
+
+    // Check for truncation and return the first valid position
+    for (var rect in rects.entries) {
+      final safeRect = Rect.fromLTWH(min(maxLeft, rect.value.left),
+          rect.value.top, rect.value.width, rect.value.height);
+      if (_isRectInside(rectA, safeRect)) {
+        return safeRect.topLeft;
       }
-
-      Offset? globalOffset = tfBox?.localToGlobal(Offset.zero);
-      Offset? avoidTruncationOffset;
-
-      double topPadding;
-      double leftPadding;
-
-      if (globalOffset != null) {
-        double dx = globalOffset.dx + localOffset.dx;
-        double dy = globalOffset.dy + localOffset.dy;
-
-        if (dialogHeight != null && (dy + dialogHeight) > screenHeight!) {
-          topPadding =
-              (dy - dialogHeight - _cursorHeight - (edgePadding?.top ?? 0.0));
-          if (topPadding > (screenHeight - dialogHeight)) {
-            topPadding = screenHeight -
-                dialogHeight -
-                _cursorHeight -
-                (edgePadding?.top ?? 0.0);
-          }
-        } else {
-          topPadding = dy + (edgePadding?.bottom ?? 0.0);
-        }
-
-        if (dialogWidth != null && (dx + dialogWidth) > screenWidth!) {
-          if (dx > (screenWidth - dialogWidth)) {
-            leftPadding = (dx - dialogWidth);
-            if (leftPadding > (screenWidth - dialogWidth)) {
-              leftPadding = screenWidth - dialogWidth;
-            }
-          } else {
-            leftPadding = dx - (dialogWidth - (edgePadding?.left ?? 0.0));
-          }
-        } else {
-          leftPadding = dx + (edgePadding?.right ?? 0.0);
-        }
-        avoidTruncationOffset = Offset(leftPadding, topPadding);
-      }
-
-      return avoidTruncationOffset;
-    } else {
-      return null;
     }
+    return null;
+  }
+
+  bool _isRectInside(Rect outer, Rect inner) {
+    return outer.contains(inner.topLeft) &&
+        outer.contains(inner.topRight) &&
+        outer.contains(inner.bottomLeft) &&
+        outer.contains(inner.bottomRight);
+  }
+
+  void _notifySuggestions() {
+    _bhMatchedSuggestionList.add(_suggestibleData
+        ?.where(
+            (element) => element.prefix == _bhMatchedStateList.value?.prefix)
+        .toList());
+  }
+
+  @override
+  void dispose() {
+    _bhMatchedStateList.close();
+    _bhMatchedSuggestionList.close();
+    _subscription.cancel();
+    super.dispose();
   }
 }
 
-class PrefixMatchState {
-  late final String prefix;
-  late final String text;
-  Offset? offset;
+enum TypeAheadAlignEnum { topLeft, topRight, bottomLeft, bottomRight }
 
-  PrefixMatchState(this.prefix, this.text, {this.offset});
+class PrefixMatchState {
+  final String prefix;
+  final String text;
+  final Offset offset;
+
+  PrefixMatchState(this.prefix, this.text, this.offset);
 }
